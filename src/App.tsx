@@ -1,158 +1,111 @@
 import "./styles.css";
+import { useMemo } from "react";
+import { useAppState, actions } from "./state/store";
+import { checkConsistency } from "./domain/rules";
+import { MetricBar } from "./ui/MetricBar";
+import { CaseForm } from "./ui/CaseForm";
+import { CaseCard } from "./ui/CaseCard";
+import { MicroBoard } from "./ui/MicroBoard";
+import { ConflictPanel } from "./ui/ConflictPanel";
 
-const project = {
-  "id": "hxwl-04",
-  "port": 5104,
-  "title": "牙科根管治疗",
-  "subtitle": "按牙位组织根管步骤、工作长度与复诊计划",
-  "stack": "React + Vite + TypeScript + CSS",
-  "theme": [
-    "#0369a1",
-    "#7c3aed",
-    "#ea580c"
-  ],
-  "domain": "牙体牙髓",
-  "users": [
-    "牙科医生",
-    "助理",
-    "前台复诊协调员"
-  ],
-  "metrics": [
-    "待复诊",
-    "已充填",
-    "平均工作长度",
-    "封药病例"
-  ],
-  "filters": [
-    "开髓",
-    "测长",
-    "封药",
-    "充填"
-  ],
-  "fields": [
-    "牙位",
-    "开髓",
-    "测长",
-    "根管预备",
-    "冲洗",
-    "封药",
-    "主尖锉号"
-  ],
-  "records": [
-    [
-      "#36",
-      "慢性根尖周炎",
-      "封药",
-      "MB 19.5mm，主尖锉#30"
-    ],
-    [
-      "#11",
-      "外伤后变色",
-      "充填",
-      "单根管，冷侧压完成"
-    ],
-    [
-      "#46",
-      "急性牙髓炎",
-      "测长",
-      "近中双根管需复诊"
-    ]
-  ]
-};
-
-const statusColors = ["status-ok", "status-watch", "status-danger"];
-
-function MetricCard({ label, value, index }: { label: string; value: string; index: number }) {
-  return (
-    <article className="metric-card">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <i className={statusColors[index % statusColors.length]} />
-    </article>
-  );
-}
+const RULE_BOOK = [
+  { code: "R1", text: "超出根尖或距根尖超过三毫米，转显微会诊" },
+  { code: "R2", text: "封药或充填后禁止补记" },
+  { code: "R3", text: "同一患者同一时段只能占一个显微台" },
+  { code: "R4", text: "改期先释放原时段" },
+  { code: "R5", text: "处置完成冻结；返工生成带原因版本并保留旧值" },
+];
 
 function App() {
-  const values = project.metrics.map((metric: string, index: number) => {
-    const base = [84, 12, 31, 7][index % 4];
-    return String(base + index * 3);
-  });
+  const state = useAppState();
+  const consistencyErrors = useMemo(() => checkConsistency(state), [state]);
 
   return (
     <main className="app-shell">
       <section className="hero">
         <div>
-          <p className="eyebrow">{project.id} · port {project.port}</p>
-          <h1>{project.title}</h1>
-          <p className="subtitle">{project.subtitle}</p>
+          <p className="eyebrow">hxwl-04 · port 5104 · 牙体牙髓</p>
+          <h1>根管分离器械处置台</h1>
+          <p className="subtitle">
+            按牙位记录根管、距根尖距离、分离器械与处置方案；封药/充填后锁定补记，
+            超出根尖或距根尖超过 3mm 转显微会诊；完成即冻结，返工生成带原因的新版本。
+          </p>
         </div>
         <div className="stack-card">
           <span>技术栈</span>
-          <strong>{project.stack}</strong>
+          <strong>React + Vite + TypeScript + CSS</strong>
+          <span>领域数据 / 校验 / 界面三层独立 · 不增加依赖 · localStorage 持久化</span>
         </div>
       </section>
 
-      <section className="metrics-grid">
-        {project.metrics.map((metric: string, index: number) => (
-          <MetricCard key={metric} label={metric} value={values[index]} index={index} />
-        ))}
-      </section>
+      <MetricBar state={state} />
 
       <section className="workspace">
         <aside className="panel narrow">
           <h2>角色</h2>
           <div className="chips">
-            {project.users.map((user: string) => (
-              <span key={user}>{user}</span>
-            ))}
+            <span>牙体牙髓医生</span>
+            <span>椅旁助理</span>
+            <span>显微会诊协调员</span>
           </div>
-          <h2>筛选</h2>
-          <div className="chips muted">
-            {project.filters.map((filter: string) => (
-              <button key={filter}>{filter}</button>
+          <h2>处置规则</h2>
+          <ul className="rule-book">
+            {RULE_BOOK.map((r) => (
+              <li key={r.code}>
+                <b>{r.code}</b>
+                <span>{r.text}</span>
+              </li>
             ))}
+          </ul>
+          <h2>数据</h2>
+          <div className="data-actions">
+            <button onClick={() => actions.resetSeed()}>重置为示例数据</button>
           </div>
+          <p className="dim small-note">
+            数据实时写入浏览器存储，刷新后牙位、处置、预约与版本保持一致。
+          </p>
+          {consistencyErrors.length > 0 && (
+            <div className="consistency-bad">
+              <b>一致性异常</b>
+              <ul>
+                {consistencyErrors.map((e, i) => (
+                  <li key={i}>{e}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </aside>
 
-        <section className="panel">
-          <div className="section-heading">
-            <div>
-              <p>{project.domain}</p>
-              <h2>记录字段</h2>
+        <div className="main-col">
+          <CaseForm />
+          <section className="panel records-panel">
+            <div className="section-heading">
+              <div>
+                <p>牙位 · 根管 · 距离 · 器械 · 方案</p>
+                <h2>分离器械处置记录（{state.cases.length}）</h2>
+              </div>
             </div>
-            <button className="primary-action">新增记录</button>
-          </div>
-          <div className="field-grid">
-            {project.fields.map((field: string) => (
-              <label key={field}>
-                <span>{field}</span>
-                <input placeholder={"填写" + field} />
-              </label>
-            ))}
-          </div>
-        </section>
+            <div className="case-list">
+              {state.cases.map((c) => (
+                <CaseCard key={c.id} active={c} />
+              ))}
+            </div>
+          </section>
+        </div>
       </section>
 
-      <section className="records panel">
-        <div className="section-heading">
-          <div>
-            <p>示例数据</p>
-            <h2>近期记录</h2>
-          </div>
-          <button>导出摘要</button>
-        </div>
-        <div className="record-list">
-          {project.records.map((record: string[], index: number) => (
-            <article key={record.join("-")} className="record-card">
-              <div className="record-index">{String(index + 1).padStart(2, "0")}</div>
-              <div>
-                <h3>{record[0]}</h3>
-                <p>{record.slice(1).join(" · ")}</p>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
+      <MicroBoard state={state} />
+      <ConflictPanel state={state} />
+
+      <footer className="app-footer">
+        <span>牙位记录数：{state.cases.length}</span>
+        <span>处置记录流水：{state.cases.reduce((n, c) => n + c.entries.length, 0)}</span>
+        <span>预约：{state.bookings.filter((b) => b.status === "booked").length} 生效 / {state.bookings.filter((b) => b.status === "released").length} 已释放</span>
+        <span>版本：{state.cases.reduce((n, c) => n + c.generations.length, 0)}</span>
+        <span className={consistencyErrors.length ? "danger-text" : "ok-text"}>
+          {consistencyErrors.length ? "一致性核对未通过" : "牙位/处置/预约/版本一致 ✓"}
+        </span>
+      </footer>
     </main>
   );
 }
